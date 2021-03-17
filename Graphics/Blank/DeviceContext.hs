@@ -5,7 +5,7 @@ module Graphics.Blank.DeviceContext where
 import           Control.Concurrent.STM
 
 import           Data.Set (Set)
-import           Data.Text.Lazy (Text, toStrict)
+import           Data.Text.Lazy (Text)
 
 import           Graphics.Blank.Events
 import           Graphics.Blank.JavaScript
@@ -56,8 +56,8 @@ devicePixelRatio = ctx_devicePixelRatio
 
 -- | Internal command to send a message to the canvas.
 sendToCanvas :: DeviceContext -> Instr -> IO ()
-sendToCanvas cxt cmds = do
-    print "sendToCanvas"	    
+sendToCanvas _cxt _cmds = do
+    print ("sendToCanvas" :: String)
 --    KC.send (theComet cxt) . toStrict . toLazyText $ surround "syncToFrame(function(){"  "});" <> cmds
 
 -- | Wait for any event. Blocks.
@@ -66,7 +66,7 @@ wait c = atomically $ readTChan (eventQueue c)
 
 -- | 'flush' all the current events, returning them all to the user. Never blocks.
 flush :: DeviceContext -> IO [Event]
-flush cxt = atomically $ loop
+flush cxt = atomically loop
   where loop = do
           b <- isEmptyTChan (eventQueue cxt)
           if b then return [] else do

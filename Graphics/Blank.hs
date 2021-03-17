@@ -131,9 +131,9 @@ module Graphics.Blank
         , Radians
         , RoundProperty(..)
         -- * @blank-canvas@ Extensions
-	-- ** static (image) data
-	, staticURL
-	, URL(..)
+        -- ** static (image) data
+        , staticURL
+        , URL(..)
         , newImage
         -- ** Reading from 'Canvas'
         , CanvasImage -- abstract
@@ -188,8 +188,6 @@ import           Control.Exception
 import           Control.Monad.IO.Class
 
 import           Data.Aeson                   (Result (..), fromJSON)
-import           Data.Aeson.Types             (parse)
-import qualified Data.List                    as L
 import qualified Data.Map                     as M (lookup)
 import qualified Data.Set                     as S
 import qualified Data.Text                    as ST
@@ -198,20 +196,17 @@ import           Data.Text.Lazy               (Text)
 import qualified Data.Text.Lazy               as T
 import qualified Data.Text.Lazy               as LT
 
-import           Graphics.Blank.Canvas        hiding (addColorStop, cursor)
+import           Graphics.Blank.Canvas        hiding (addColorStop)
 import qualified Graphics.Blank.Canvas        as Canvas
 import           Graphics.Blank.DeviceContext
 import           Graphics.Blank.Events
 import           Graphics.Blank.Generated     hiding (fillStyle, font,
                                                shadowColor, strokeStyle, cursor)
 import qualified Graphics.Blank.Generated     as Generated
-import           Graphics.Blank.JavaScript    hiding (durationAudio, height,
-                                               indexAudio, width)
+import           Graphics.Blank.JavaScript    hiding (height, width)
 import qualified Graphics.Blank.JavaScript    as JavaScript
 import           Graphics.Blank.Types
 import           Graphics.Blank.Utils
-
-import           Graphics.Blank.Instr
 
 import qualified Network.HTTP.Types           as H
 import           Network.Mime                 (defaultMimeMap,
@@ -219,34 +214,16 @@ import           Network.Mime                 (defaultMimeMap,
 import           Network.Wai                  (Middleware, responseLBS)
 import           Network.Wai.Handler.Warp
 import           Network.Wai.Middleware.Local as Local
-import           Network.Wai.Middleware.RequestLogger
 import qualified Network.JavaScript as JS
 
 import           Paths_blank_canvas
 
 import           Control.Category
 import           Prelude.Compat               hiding (id, (.))
-
-import           System.IO.Unsafe             (unsafePerformIO)
-
-
 import           Web.Scotty                   (file, get, scottyApp)
 import qualified Web.Scotty                   as Scotty
---import qualified Web.Scotty.Comet             as KC
-
-import           Control.Natural
-import qualified Control.Natural              as N
---import           Control.Remote.Monad
---import qualified Control.Remote.Packet.Strong as SP
---import qualified Control.Remote.Packet.Weak   as WP
 
 import           Control.Monad.Reader         hiding (local)
-import           Control.Monad.State          (evalStateT)
---import qualified Control.Monad.State          as State
---import           Control.Monad.Writer
-
-
-import           Data.String
 
 -- | 'blankCanvas' is the main entry point into @blank-canvas@.
 -- A typical invocation would be
@@ -271,7 +248,7 @@ blankCanvas opts actions = do
 
 --   kComet <- KC.kCometPlugin
 
-   locals :: TVar (S.Set Text) <- atomically $ newTVar S.empty
+   locals :: TVar (S.Set Text) <- newTVarIO S.empty
 
 --   print dataDir
 
@@ -283,43 +260,43 @@ blankCanvas opts actions = do
 
         Scotty.middleware $ JS.start $ \ eng -> do
 
-	  print "Got here"
+          print ("Got here" :: String)
 
-	  JS.send eng $ sequenceA
-	    [ JS.command $ JS.call "register" [ JS.string nm ]
+          void $ JS.send eng $ sequenceA
+            [ JS.command $ JS.call "register" [ JS.string nm ]
             | nm <- events opts
             ]
 
-	  print "Sent"
+          print ("Sent" :: String)
 
           queue <- atomically newTChan
 
-	  _ <- forkIO $ forever $ do
-	  	 atomically $ do
-		   (val,_) <- JS.readEventChan eng
-		   case fromJSON val of
+          _ <- forkIO $ forever $ do
+                 atomically $ do
+                   (val,_) <- JS.readEventChan eng
+                   case fromJSON val of
                       Success (event :: Event) -> writeTChan queue event
                       _ -> return ()
 
-	  -- use fake context to get values for real context
-	  let cxt0 = DeviceContext eng queue 300 300 1 locals False
-	  DeviceAttributes w h dpr <- send cxt0 device
+          -- use fake context to get values for real context
+          let cxt0 = DeviceContext eng queue 300 300 1 locals False
+          DeviceAttributes w h dpr <- send cxt0 device
 
-	  -- Build the actual context
-	  let cxt1 = cxt0
+          -- Build the actual context
+          let cxt1 = cxt0
                 { ctx_width = w
                 , ctx_height = h
                 , ctx_devicePixelRatio = dpr
                 , weakRemoteMonad = weak opts
                 }
 
-          (actions $ cxt1) `catch` \ (e :: SomeException) -> do
+          actions cxt1 `catch` \ (e :: SomeException) -> do
                print ("Exception in blank-canvas application:" :: String)
                print e
                throw e
 
-	  -- and we're done
-	  return ()
+          -- and we're done
+          return ()
 
         get "/"                 $ file $ dataDir ++ "/static/index.html"
         get "/jquery.js"        $ file $ dataDir ++ "/static/jquery.js"
@@ -328,21 +305,18 @@ blankCanvas opts actions = do
         -- There has to be a better way of doing this, using function, perhaps?
         get (Scotty.regex "^/(.*)$") $ do
           fileName :: Text <- Scotty.param "1"
-          db <- liftIO $ atomically $ readTVar $ locals
+          db <- liftIO $ readTVarIO locals
           if fileName `S.member` db
           then do
             let mime = mimeType fileName
-            Scotty.setHeader "Content-Type" $ mime
-            file $ (root opts ++ "/" ++ T.unpack fileName)
+            Scotty.setHeader "Content-Type" mime
+            file $ root opts ++ "/" ++ T.unpack fileName
           else do
             Scotty.next
 
         return ()
 
-   runSettings (setPort (port opts)
-               $ setTimeout 100
-               $ defaultSettings
-               ) app
+   runSettings (setPort (port opts) $ setTimeout 100 defaultSettings) app
 
 {-
 generalSend :: forall m a . RunMonad m
@@ -513,21 +487,13 @@ send cxt (Canvas cm) = do
 -- >  url <- staticURL cxt "image/png" "image/foo.png"
 --
 staticURL :: DeviceContext -> ST.Text -> FilePath -> IO URL
-staticURL _ txt path = readDataURL txt path
+staticURL _ = readDataURL
 
 local_only :: Middleware
-local_only = Local.local $ responseLBS H.status403 [("Content-Type", "text/plain")] "local access only"
+local_only = Local.local $
+   responseLBS H.status403 [("Content-Type", "text/plain")] "local access only"
 
 
-{-# NOINLINE uniqVar #-}
-uniqVar :: TVar Int
-uniqVar = unsafePerformIO $ newTVarIO 0
-
-getUniq :: STM Int
-getUniq = do
-    u <- readTVar uniqVar
-    writeTVar uniqVar (u + 1)
-    return u
 
 mimeType :: Text -> Text
 mimeType filePath = LT.fromStrict $ go $ fileNameExtensions $ LT.toStrict filePath

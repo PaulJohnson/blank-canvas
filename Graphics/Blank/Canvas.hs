@@ -18,17 +18,14 @@ module Graphics.Blank.Canvas where
 
 import           Data.Aeson (FromJSON(..),Value(..), Result(..), encode, withObject)
 import           Data.Aeson.Types (Parser, parse, (.:))
-import           Data.Text.Lazy (Text, fromStrict, toStrict)
 import           Data.Text.Lazy.Encoding (decodeUtf8)
+import           Data.Text.Lazy (fromStrict)
 import qualified Data.Text as ST
 
 import           Graphics.Blank.Events
 import           Graphics.Blank.JavaScript
 import           Graphics.Blank.Types
-import           Graphics.Blank.Types.Font
-
 import           Graphics.Blank.Instr
-import qualified Graphics.Blank.Instr as I
 
 import           Prelude.Compat
 
@@ -37,7 +34,6 @@ import           TextShow.TH (deriveTextShow)
 --import           Control.Remote.Monad hiding (primitive)
 --import qualified Control.Remote.Monad as RM
 import           Control.Monad.Reader
-import           Control.Monad.State
 
 import qualified Network.JavaScript as JS
 
@@ -48,7 +44,7 @@ $(deriveTextShow ''DeviceAttributes)
 instance InstrShow DeviceAttributes
 
 -- | The 'width' argument of 'TextMetrics' can trivially be projected out.
-data TextMetrics = TextMetrics Double deriving Show
+newtype TextMetrics = TextMetrics Double deriving Show
 $(deriveTextShow ''TextMetrics)
 
 instance InstrShow TextMetrics
@@ -64,7 +60,7 @@ instance Functor Canvas where
 
 instance Applicative Canvas where
   pure a = Canvas $ \ _ -> return a
-  Canvas f <*> Canvas g = Canvas $ \ cc -> (f cc <*> g cc)
+  Canvas f <*> Canvas g = Canvas $ \ cc -> f cc <*> g cc
   Canvas f *> Canvas g = Canvas $ \ cc -> f cc *> g cc
   Canvas f <* Canvas g = Canvas $ \ cc -> f cc <* g cc
 
@@ -105,14 +101,13 @@ primitiveMethod f args = context $ \ cc ->
 -- A bit of a hack; we use method generation to also
 -- generate attribute assignment.
 primitiveAttribute :: Method m => JS.JavaScript -> [JS.JavaScript] -> m
-primitiveAttribute f args = primitiveMethod (f <> "=") args
+primitiveAttribute f = primitiveMethod $ f <> "="
 
 primitiveCommand :: JS.JavaScript -> [JS.JavaScript] -> Canvas ()
 primitiveCommand f args = Canvas $ \ _ ->
   JS.command $ JS.call f args
 
-primitiveConstructor :: JS.JavaScript -> [JS.JavaScript]
-         	     -> Canvas (JS.RemoteValue a)
+primitiveConstructor :: JS.JavaScript -> [JS.JavaScript] -> Canvas (JS.RemoteValue a)
 primitiveConstructor f args = Canvas $ \ cc ->
   JS.constructor $ showJSB cc <> "." <> JS.call f args
 
@@ -122,14 +117,13 @@ blankConstructor f args = Canvas $ \ cc ->
   JS.constructor $ JS.call (JS.call f args) [showJSB cc]
 
 primitiveQuery :: JS.JavaScript
-	       -> [JS.JavaScript]
-	       -> (Value -> Parser a)
-	       -> Canvas a
+          -> [JS.JavaScript]
+          -> (Value -> Parser a)
+          -> Canvas a
 primitiveQuery f args k = Canvas $ \ cc ->
   (\ v -> case parse k v of
     Error msg -> error msg -- TODO: revisit this fail
-    Success a -> a) <$> (JS.procedure $
-       (JS.call f args <> "(" <> showJSB cc <> ")"))
+    Success a -> a) <$> JS.procedure (JS.call f args <> "(" <> showJSB cc <> ")")
 
 
 {-
@@ -153,7 +147,7 @@ with c (Canvas m) = Canvas $ \ _ -> m c
 
 -- | 'myCanvasContext' returns the current 'CanvasContext'.
 myCanvasContext :: Canvas CanvasContext
-myCanvasContext = Canvas $ return
+myCanvasContext = Canvas return
 
 -----------------------------------------------------------------------------
 
@@ -190,8 +184,7 @@ uncurry3 :: (a -> b -> c -> d) -> (a, b, c) -> d
 uncurry3 f (a,b,c) = f a b c
 
 device :: Canvas DeviceAttributes
-device = primitiveQuery "Device" [] $ \ v ->
-  uncurry3 DeviceAttributes <$> parseJSON v
+device = primitiveQuery "Device" [] $ fmap (uncurry3 DeviceAttributes) . parseJSON
 
 -- | Turn the canvas into a PNG data stream / data URL.
 --
@@ -229,8 +222,8 @@ isPointInPath (a1,a2) =
 -- /after/ loading.
 -- If you are using local images, loading should be near instant.
 newImage :: URL -> Canvas CanvasImage
-newImage (URL txt) = primitiveQuery "NewImage" [showJSB txt] $ \ v ->
-  uncurry3 CanvasImage <$> parseJSON v
+newImage (URL txt) = primitiveQuery "NewImage" [showJSB txt] $
+   fmap (uncurry3 CanvasImage) . parseJSON
 
 -- | 'newAudio' takes a URL (or file path) to an audio file and returns the 'CanvasAudio' handle
 -- /after/ loading.
@@ -342,4 +335,3 @@ getImageData (sx,sy,sw,sh) = primitiveQuery "GetImageData"
 -- | Send all commands to the browser, wait for the browser to act, then continue.
 sync :: Canvas ()
 sync = primitiveQuery "Sync" [] $ const $ return ()
-

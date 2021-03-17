@@ -5,18 +5,13 @@
 module Graphics.Blank.Generated where
 
 import qualified Data.Text                 as ST
-import           Data.Text.Lazy            (fromStrict)
 
 import           Graphics.Blank.Canvas
 import           Graphics.Blank.JavaScript
 import           Graphics.Blank.Types
 import           Graphics.Blank.Types.Font
 
-import           Graphics.Blank.Instr
-
 import           Prelude.Compat
-
-import qualified Network.JavaScript as JS
 
 -- import           TextShow (TextShow(..), FromTextShow(..), singleton)
 import           Graphics.Blank.Types.Cursor(CanvasCursor, jsbCanvasCursor)
@@ -121,7 +116,7 @@ bezierCurveTo (a1,a2,a3,a4,a5,a6) = primitiveMethod "bezierCurveTo"
 -- 'clearRect'(20, 20, 100, 50)
 -- @
 clearRect :: (Double, Double, Double, Double) -> Canvas ()
-clearRect (a1,a2,a3,a4) = primitiveMethod "clearRect" 
+clearRect (a1,a2,a3,a4) = primitiveMethod "clearRect"
   [ showJSB a1, showJSB a2, showJSB a3, showJSB a4 ]
 
 -- | Turns the path currently being built into the current clipping path.
@@ -157,7 +152,7 @@ closePath () = primitiveMethod "closePath" []
 
 -- | drawImage' takes 2, 4, or 8 'Double' arguments. See 'drawImageAt', 'drawImageSize', and 'drawImageCrop' for variants with exact numbers of arguments.
 drawImage :: Image image => (image,[Double]) -> Canvas ()
-drawImage (img, args) = primitiveMethod "drawImage" 
+drawImage (img, args) = primitiveMethod "drawImage"
   (jsbImage img : map showJSB args)
 
 -- | Fills the current path with the current 'fillStyle'.
@@ -181,7 +176,7 @@ fill () = primitiveMethod "fill" []
 -- 'fillRect'(0, 0, 300, 150)
 -- @
 fillRect :: (Double, Double, Double, Double) -> Canvas ()
-fillRect (a1, a2, a3, a4) = primitiveMethod "fillRect" 
+fillRect (a1, a2, a3, a4) = primitiveMethod "fillRect"
   [ showJSB a1, showJSB a2, showJSB a3, showJSB a4 ]
 
 -- | Sets the color, gradient, or pattern used to fill a drawing ('black' by default).
@@ -243,7 +238,7 @@ globalAlpha a = primitiveAttribute "globalAlpha" [showJSB a]
 -- 'globalCompositeOperation' \"destination-atop\"
 -- @
 globalCompositeOperation :: ST.Text -> Canvas ()
-globalCompositeOperation t = 
+globalCompositeOperation t =
   primitiveAttribute "globalCompositeOperation" [showJSB t]
 
 -- | Sets the 'LineEndCap' to use when drawing the endpoints of lines.

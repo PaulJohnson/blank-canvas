@@ -2,6 +2,8 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+
 module Graphics.Blank.JavaScript where
 
 import           Data.Bits                       (shiftR, (.&.))
@@ -39,15 +41,16 @@ import qualified Network.JavaScript              as JS
 -------------------------------------------------------------
 
 -- Orphan
-instance TextShow (JS.RemoteValue a)
+instance TextShow (JS.RemoteValue a) where
+   showb = TextShow.fromString . show
 instance InstrShow (JS.RemoteValue a) where
   showi v = I.fromText txt where JS.JavaScript txt = JS.var v
 
 -- | A handle to an offscreen canvas. 'CanvasContext' cannot be destroyed.
 data CanvasContext =
   CanvasContext (Maybe (JS.RemoteValue CanvasContext))
-  		Int
-		Int
+                  Int
+                Int
      deriving (Eq, Ord, Show)
 
 $(deriveTextShow ''CanvasContext)
